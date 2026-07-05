@@ -18,6 +18,19 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
 .app{max-width:860px;margin:0 auto;padding:1.5rem 1rem 5rem}
 
+/* LOCK SCREEN */
+.lock-screen{position:fixed;inset:0;background:#f4f4f1;display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem}
+.lock-box{background:#fff;border:1px solid #e2e2de;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:360px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.1)}
+.lock-icon{font-size:48px;margin-bottom:1rem}
+.lock-box h2{font-size:20px;font-weight:700;margin-bottom:6px}
+.lock-box p{font-size:14px;color:#6b6b68;margin-bottom:1.5rem}
+.lock-box input{text-align:center;font-size:18px;letter-spacing:3px;margin-bottom:12px;border-radius:10px}
+.lock-box button{width:100%;padding:11px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+.lock-box button:hover{background:#1d4ed8}
+.lock-error{color:#dc2626;font-size:13px;margin-top:8px;min-height:20px}
+.lock-footer{font-size:12px;color:#a0a09e;margin-top:1.5rem}
+.hidden{display:none}
+
 /* HEADER */
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px}
 .header h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:8px}
@@ -131,7 +144,20 @@ input::placeholder{color:var(--muted)}
 </style>
 </head>
 <body>
-<div class="app">
+<!-- LOCK SCREEN -->
+<div class="lock-screen" id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon">🔐</div>
+    <h2>Tuition Manager</h2>
+    <p>Enter your password to access</p>
+    <input type="password" id="lock-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')unlock()"/>
+    <button onclick="unlock()">Unlock</button>
+    <div class="lock-error" id="lock-error"></div>
+    <div class="lock-footer">Private — authorized access only</div>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none">
 
   <!-- HEADER -->
   <div class="header">
@@ -139,10 +165,13 @@ input::placeholder{color:var(--muted)}
       <h1>📚 Tuition Manager</h1>
       <p>Manage students, fees & monthly records</p>
     </div>
-    <div class="month-selector">
-      <button onclick="prevMonth()">◀</button>
-      <select id="month-select" onchange="onMonthChange()"></select>
-      <button onclick="nextMonth()">▶</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="month-selector">
+        <button onclick="prevMonth()">◀</button>
+        <select id="month-select" onchange="onMonthChange()"></select>
+        <button onclick="nextMonth()">▶</button>
+      </div>
+      <button onclick="logout()" style="padding:7px 14px;border:1px solid #e2e2de;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#6b6b68">🔒 Lock</button>
     </div>
   </div>
 
@@ -238,6 +267,32 @@ input::placeholder{color:var(--muted)}
 </div>
 
 <script>
+// ── PASSWORD LOCK ─────────────────────────────────────────────────────────────
+const PASS = 'wasif123';
+function unlock() {
+  const val = document.getElementById('lock-input').value;
+  if(val === PASS) {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    try { sessionStorage.setItem('tm_auth','1'); } catch(e){}
+  } else {
+    const err = document.getElementById('lock-error');
+    err.textContent = 'Wrong password. Please try again.';
+    document.getElementById('lock-input').value = '';
+    document.getElementById('lock-input').focus();
+    setTimeout(()=>{ err.textContent=''; }, 3000);
+  }
+}
+// Auto-unlock if already authenticated this session
+(function(){
+  try {
+    if(sessionStorage.getItem('tm_auth')==='1'){
+      document.getElementById('lock-screen').style.display='none';
+      document.getElementById('main-app').style.display='block';
+    }
+  } catch(e){}
+})();
+
 // ── DATA ──────────────────────────────────────────────────────────────────────
 let students = [];
 let feeRecords = {}; // { "2025-07": { studentId: { status, paid } } }
@@ -248,14 +303,14 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 
 function load() {
   try {
-    students   = JSON.parse(localStorage.getItem('tm2_students') || '[]');
-    feeRecords = JSON.parse(localStorage.getItem('tm2_fees')     || '{}');
+    students = JSON.parse(localStorage.getItem('tm2_students') || '[]');
+    feeRecords = JSON.parse(localStorage.getItem('tm2_fees') || '{}');
   } catch(e) {}
 }
 function save() {
   try {
     localStorage.setItem('tm2_students', JSON.stringify(students));
-    localStorage.setItem('tm2_fees',     JSON.stringify(feeRecords));
+    localStorage.setItem('tm2_fees', JSON.stringify(feeRecords));
   } catch(e) {}
 }
 
@@ -345,9 +400,9 @@ function monthStats(key) {
   students.forEach(s => {
     const r = getRecord(key, s.id);
     collected += r.paid;
-    if(r.status==='paid')    { paidCount++;    }
+    if(r.status==='paid') { paidCount++; }
     else if(r.status==='partial') { partialCount++; pending += s.fee - r.paid; }
-    else                     { unpaidCount++;  pending += s.fee; }
+    else { unpaidCount++; pending += s.fee; }
   });
   return { collected, pending, paidCount, unpaidCount, partialCount, total: students.length };
 }
@@ -382,222 +437,3 @@ function renderDashboard() {
   const el = document.getElementById('dash-list');
   if(!students.length){ el.innerHTML='<div class="empty">No students yet. Go to Students tab to add.</div>'; return; }
   if(!unpaid.length){ el.innerHTML='<div class="empty" style="color:var(--green)">🎉 All students have paid for '+keyToLabel(currentMonth)+'!</div>'; return; }
-  el.innerHTML = '<p style="font-size:13px;color:var(--sec);margin-bottom:8px;font-weight:600">PENDING PAYMENTS</p>' +
-    unpaid.map(s => {
-      const r = getRecord(currentMonth, s.id);
-      const due = s.fee - r.paid;
-      return `<div class="fee-card">
-        <div class="avatar">${ini(s.name)}</div>
-        <div>
-          <div class="s-name">${s.name}</div>
-          <div class="s-meta">${classLabel(s.class)} · Fee: ${fmt(s.fee)}${r.status==='partial'?' · Paid: '+fmt(r.paid):''}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(due)}</div>
-          <div style="font-size:11px;color:var(--muted)">${r.status==='partial'?'partial':'pending'}</div>
-        </div>
-        <div class="fee-actions">
-          <button class="btn-paid" onclick="markStatus('${s.id}','paid',${s.fee})">Mark paid</button>
-        </div>
-      </div>`;
-    }).join('');
-}
-
-// ── MONTHLY FEES ──────────────────────────────────────────────────────────────
-function renderFees() {
-  const cf = document.getElementById('fee-class-filter').value;
-  const sf = document.getElementById('fee-status-filter').value;
-  document.getElementById('fees-title').textContent = keyToLabel(currentMonth) + ' — Fee Records';
-
-  const st = monthStats(currentMonth);
-  document.getElementById('fee-stats').innerHTML = `
-    <div class="stat"><div class="stat-val g">${fmt(st.collected)}</div><div class="stat-lbl">Collected</div></div>
-    <div class="stat"><div class="stat-val r">${fmt(st.pending)}</div><div class="stat-lbl">Pending</div></div>
-    <div class="stat"><div class="stat-val g">${st.paidCount}</div><div class="stat-lbl">Paid</div></div>
-    <div class="stat"><div class="stat-val r">${st.unpaidCount}</div><div class="stat-lbl">Unpaid</div></div>
-  `;
-
-  let list = students;
-  if(cf !== 'all') list = list.filter(s => String(s.class) === cf);
-  if(sf !== 'all') list = list.filter(s => getRecord(currentMonth, s.id).status === sf);
-
-  const el = document.getElementById('fee-list');
-  if(!list.length){ el.innerHTML='<div class="empty">No records found.</div>'; return; }
-
-  el.innerHTML = list.map(s => {
-    const r = getRecord(currentMonth, s.id);
-    const due = s.fee - r.paid;
-    return `<div class="fee-card">
-      <div class="avatar">${ini(s.name)}</div>
-      <div>
-        <div class="s-name">${s.name} <span class="chip">${classLabel(s.class)}</span></div>
-        <div class="s-meta">Fee: ${fmt(s.fee)}${r.status==='partial'?' · Received: '+fmt(r.paid)+' · Due: '+fmt(due):r.status==='paid'?' · Fully paid':' · Due: '+fmt(s.fee)}</div>
-      </div>
-      <div><span class="badge ${r.status}">${r.status}</span></div>
-      <div class="fee-actions">
-        ${r.status!=='paid'?`<button class="btn-paid" onclick="markStatus('${s.id}','paid',${s.fee})">Paid</button>`:''}
-        ${r.status!=='partial'?`<button class="btn-partial" onclick="openModal('${s.id}')">Partial</button>`:''}
-        ${r.status!=='unpaid'?`<button class="btn-unpaid" onclick="markStatus('${s.id}','unpaid',0)">Unpaid</button>`:''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function markStatus(sid, status, paid) {
-  setRecord(currentMonth, sid, status, paid);
-  refreshAll();
-}
-
-// ── PARTIAL MODAL ─────────────────────────────────────────────────────────────
-function openModal(sid) {
-  modalStudentId = sid;
-  const s = students.find(x => x.id == sid);
-  document.getElementById('modal-student-name').textContent =
-    s ? s.name + ' — Full fee: ' + fmt(s.fee) : 'Enter amount received';
-  document.getElementById('modal-amount').value = '';
-  document.getElementById('modal').classList.remove('hidden');
-  document.getElementById('modal-amount').focus();
-}
-function closeModal() {
-  document.getElementById('modal').classList.add('hidden');
-  modalStudentId = null;
-}
-function confirmPartial() {
-  const amt = parseInt(document.getElementById('modal-amount').value) || 0;
-  if(!amt || amt <= 0){ alert('Please enter a valid amount.'); return; }
-  const s = students.find(x => x.id == modalStudentId);
-  if(s && amt >= s.fee){ markStatus(modalStudentId, 'paid', s.fee); }
-  else { markStatus(modalStudentId, 'partial', amt); }
-  closeModal();
-}
-document.getElementById('modal').addEventListener('click', function(e){
-  if(e.target === this) closeModal();
-});
-
-// ── STUDENTS ──────────────────────────────────────────────────────────────────
-function renderStudents() {
-  const cf = document.getElementById('s-class-filter').value;
-  const q  = document.getElementById('s-search').value.toLowerCase();
-  let list = students;
-  if(cf !== 'all') list = list.filter(s => String(s.class) === cf);
-  if(q) list = list.filter(s => s.name.toLowerCase().includes(q));
-
-  const el = document.getElementById('student-list');
-  if(!list.length){ el.innerHTML='<div class="empty">No students found.</div>'; return; }
-
-  el.innerHTML = list.map(s => {
-    const r = getRecord(currentMonth, s.id);
-    return `<div class="s-card">
-      <div class="avatar">${ini(s.name)}</div>
-      <div>
-        <div class="s-name">${s.name}</div>
-        <div class="s-meta">${classLabel(s.class)} · ${fmt(s.fee)}/month</div>
-      </div>
-      <div class="s-fee-col" style="text-align:right">
-        <div class="s-fee">${fmt(s.fee)}</div>
-        <div class="s-fee-lbl">per month</div>
-      </div>
-      <div><span class="badge ${r.status}">${r.status} (${keyToLabel(currentMonth).split(' ')[0]})</span></div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-        <button class="btn btn-sm" style="background:var(--surface2);border:1px solid var(--border)" onclick="editFee('${s.id}')">Edit fee</button>
-        <button class="btn-del" onclick="deleteStudent('${s.id}')">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function addStudent() {
-  const name = document.getElementById('s-name').value.trim();
-  const cls  = document.getElementById('s-class').value;
-  const fee  = parseInt(document.getElementById('s-fee').value) || 0;
-  if(!name || !fee){ alert('Please enter name and fee amount.'); return; }
-  const id = 's' + Date.now();
-  students.push({ id, name, class: cls, fee });
-  // init record for current month
-  if(!feeRecords[currentMonth]) feeRecords[currentMonth] = {};
-  feeRecords[currentMonth][id] = { status:'unpaid', paid:0 };
-  save();
-  document.getElementById('s-name').value = '';
-  document.getElementById('s-fee').value  = '';
-  renderStudents();
-  renderDashboard();
-}
-
-function deleteStudent(sid) {
-  const s = students.find(x => x.id === sid);
-  if(!confirm('Remove ' + (s?s.name:'this student') + '? This will delete all their fee records too.')) return;
-  students = students.filter(x => x.id !== sid);
-  Object.keys(feeRecords).forEach(k => { delete feeRecords[k][sid]; });
-  save(); renderStudents(); renderDashboard();
-}
-
-function editFee(sid) {
-  const s = students.find(x => x.id === sid);
-  if(!s) return;
-  const newFee = prompt('Update monthly fee for ' + s.name + ' (current: ₹' + s.fee + '):', s.fee);
-  if(newFee === null) return;
-  const f = parseInt(newFee);
-  if(!f || f <= 0){ alert('Invalid fee amount.'); return; }
-  s.fee = f;
-  save(); renderStudents();
-}
-
-// ── SUMMARY ───────────────────────────────────────────────────────────────────
-function renderSummary() {
-  const months = Object.keys(feeRecords).sort().reverse();
-  const el = document.getElementById('summary-content');
-  if(!months.length){ el.innerHTML='<div class="empty">No records yet.</div>'; return; }
-
-  el.innerHTML = months.map(key => {
-    const st = monthStats(key);
-    const rows = students.map(s => {
-      const r = getRecord(key, s.id);
-      const due = s.fee - r.paid;
-      return `<div class="h-row">
-        <div>
-          <div class="h-name">${s.name} <span class="chip">${classLabel(s.class)}</span></div>
-          <div class="h-meta">Fee: ${fmt(s.fee)}${r.status==='partial'?' · Paid: '+fmt(r.paid)+' · Due: '+fmt(due):''}</div>
-        </div>
-        <span class="badge ${r.status}">${r.status}</span>
-      </div>`;
-    }).join('');
-
-    return `<div class="history-month">
-      <div class="history-month-head" onclick="toggleHistory(this)">
-        <h3>${keyToLabel(key)}</h3>
-        <div class="sum-detail">
-          <div class="sum-item">Collected: <span style="color:var(--green)">${fmt(st.collected)}</span></div>
-          <div class="sum-item">Pending: <span style="color:var(--red)">${fmt(st.pending)}</span></div>
-          <div class="sum-item">Paid: <span>${st.paidCount}/${st.total}</span></div>
-          <span style="font-size:18px;color:var(--muted)">▾</span>
-        </div>
-      </div>
-      <div class="history-month-body">${rows || '<div class="empty">No students.</div>'}</div>
-    </div>`;
-  }).join('');
-}
-
-function toggleHistory(head) {
-  const body = head.nextElementSibling;
-  body.classList.toggle('open');
-}
-
-// ── INIT ──────────────────────────────────────────────────────────────────────
-function refreshAll() {
-  const activeTab = [...document.querySelectorAll('.tab')].find(t=>t.classList.contains('active'));
-  const tabName = activeTab ? ['dashboard','fees','students','summary'][
-    [...document.querySelectorAll('.tab')].indexOf(activeTab)] : 'dashboard';
-  if(tabName==='dashboard') renderDashboard();
-  if(tabName==='fees') renderFees();
-  if(tabName==='students') renderStudents();
-  if(tabName==='summary') renderSummary();
-}
-
-load();
-currentMonth = todayKey();
-ensureMonthRecords(currentMonth);
-buildMonthSelect();
-renderDashboard();
-</script>
-</body>
-</html>
